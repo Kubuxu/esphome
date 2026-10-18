@@ -23,10 +23,12 @@ XXTEA_SCHEMA = cv.Schema(
 ).extend(cv.COMPONENT_SCHEMA)
 
 
+# The rolling code keeps the last counter of one peer, and accepts a packet only once the peer has sent back this
+# device's boot number
 @ENCRYPTION.register(
     "xxtea",
     schema=XXTEA_SCHEMA,
-    # The rolling code accepts a packet only once the peer has sent back this device's boot number
+    single_peer=lambda config: config[CONF_ROLLING_CODE_ENABLE],
     needs_session=lambda config: config[CONF_ROLLING_CODE_ENABLE],
     auto_load=lambda config: ["xxtea"],
 )
