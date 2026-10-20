@@ -1,1 +1,17 @@
-<<: !include common.yaml
+packages:
+  ledc: !include common.yaml
+
+output:
+  - platform: ledc
+    id: test_ledc_dithered
+    pin: 5
+    channel: 2
+    frequency: 19531Hz
+    dithering: true
+
+light:
+  - platform: monochromatic
+    name: Dithered light
+    output: test_ledc_dithered
+    gamma_correct: 1.8
+    default_transition_length: 3s

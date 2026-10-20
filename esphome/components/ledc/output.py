@@ -1,8 +1,16 @@
+"""LEDC PWM outputs.
+
+On ESP32-C3, ``dithering: true`` enables four fractional duty bits averaged over
+16 PWM periods without changing the carrier frequency. It is disabled by default
+and remains active at steady brightness, not just during light transitions.
+At low PWM frequencies the 16-period pattern can introduce visible flicker.
+"""
+
 from typing import Any
 
 from esphome import automation, pins
 import esphome.codegen as cg
-from esphome.components import output
+from esphome.components import esp32, output
 from esphome.components.esp32 import include_builtin_idf_component
 import esphome.config_validation as cv
 from esphome.const import (
@@ -17,6 +25,8 @@ from esphome.cpp_generator import MockObj, TemplateArgsType
 from esphome.types import ConfigType
 
 DEPENDENCIES = ["esp32"]
+
+CONF_DITHERING = "dithering"
 
 
 def calc_max_frequency(bit_depth: int) -> float:
@@ -55,6 +65,13 @@ CONFIG_SCHEMA = output.FLOAT_OUTPUT_SCHEMA.extend(
             cv.frequency, cv.float_range(min=0, min_included=False)
         ),
         cv.Optional(CONF_CHANNEL): cv.int_range(min=0, max=15),
+        cv.Optional(CONF_DITHERING): cv.All(
+            cv.boolean,
+            esp32.only_on_variant(
+                supported=[esp32.VARIANT_ESP32C3],
+                msg_prefix="LEDC hardware dithering",
+            ),
+        ),
         cv.Optional(CONF_PHASE_ANGLE): cv.All(
             cv.angle, cv.float_range(min=0.0, max=360.0)
         ),
@@ -75,6 +92,8 @@ async def to_code(config: ConfigType) -> None:
     cg.add(var.set_frequency(config[CONF_FREQUENCY]))
     if CONF_PHASE_ANGLE in config:
         cg.add(var.set_phase_angle(config[CONF_PHASE_ANGLE]))
+    if (dithering := config.get(CONF_DITHERING)) is not None:
+        cg.add(var.set_dithering(dithering))
 
 
 @automation.register_action(

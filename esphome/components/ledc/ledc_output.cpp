@@ -132,7 +132,11 @@ void LEDCOutput::write_state(float state) {
     state = 1.0f - state;
 
   this->duty_ = state;
-  const uint32_t max_duty = (uint32_t(1) << this->bit_depth_) - 1;
+  uint8_t fractional_bits = 0;
+#ifdef USE_ESP32_VARIANT_ESP32C3
+  fractional_bits = this->dithering_ ? 4 : 0;
+#endif
+  const uint32_t max_duty = ((uint32_t(1) << this->bit_depth_) - 1) << fractional_bits;
   const float duty_rounded = roundf(state * max_duty);
   auto duty = static_cast<uint32_t>(duty_rounded);
   if (duty == this->last_duty_) {
@@ -156,7 +160,18 @@ void LEDCOutput::write_state(float state) {
       return;
     }
 #endif
-    ledc_set_duty_with_hpoint(speed_mode, chan_num, duty, hpoint);
+    ledc_set_duty_with_hpoint(speed_mode, chan_num, duty >> fractional_bits, hpoint);
+#ifdef USE_ESP32_VARIANT_ESP32C3
+    if (this->dithering_) {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 1, 0)
+      auto *hw = LEDC_LL_GET_HW(0);
+#else
+      auto *hw = LEDC_LL_GET_HW();
+#endif
+      // IDF's integer setter clears the fractional bits. Restore them before latching the update.
+      hw->channel_group[speed_mode].channel[chan_num].duty.duty = duty;
+    }
+#endif
     ledc_update_duty(speed_mode, chan_num);
     this->last_duty_ = duty;
   }
@@ -221,6 +236,9 @@ void LEDCOutput::dump_config() {
                 "  Phase angle: %.1f°\n"
                 "  Bit depth: %u",
                 this->channel_, this->frequency_, this->phase_angle_, this->bit_depth_);
+#ifdef USE_ESP32_VARIANT_ESP32C3
+  ESP_LOGCONFIG(TAG, "  Hardware dithering: %u fractional bits", this->dithering_ ? 4 : 0);
+#endif
   LOG_PIN("  Pin ", this->pin_);
   ESP_LOGV(TAG,
            "  Max frequency for bit depth: %f\n"
